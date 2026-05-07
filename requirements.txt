@@ -1,0 +1,6 @@
+pillow
+requests
+tqdm
+python-dotenv
+torch
+torchvision
