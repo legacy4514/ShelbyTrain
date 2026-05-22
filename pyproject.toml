@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shelbytrain"
+version = "0.1.0"
+description = "Decentralized AI dataset pipeline built on Shelby Protocol"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["machine-learning", "pytorch", "dataset", "shelby", "decentralized", "web3"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "pillow>=9.0.0",
+    "requests>=2.28.0",
+    "python-dotenv>=1.0.0",
+    "pandas>=1.5.0",
+    "pyarrow>=10.0.0",
+]
+
+[project.optional-dependencies]
+audio = ["soundfile>=0.12.0"]
+dev   = ["twine", "build", "pytest"]
+
+[project.urls]
+Homepage    = "https://github.com/YOUR_USERNAME/shelbytrain"
+Repository  = "https://github.com/YOUR_USERNAME/shelbytrain"
+Issues      = "https://github.com/YOUR_USERNAME/shelbytrain/issues"
+
+[tool.setuptools.packages.find]
+where   = ["."]
+include = ["shelbytrain*"]
+
+[tool.setuptools.package-data]
+shelbytrain = ["py.typed"]

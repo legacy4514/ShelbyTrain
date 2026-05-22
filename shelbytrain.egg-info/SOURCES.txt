@@ -1,0 +1,15 @@
+README.md
+pyproject.toml
+shelbytrain/__init__.py
+shelbytrain/benchmark.py
+shelbytrain/cache.py
+shelbytrain/client.py
+shelbytrain/dataset.py
+shelbytrain/lifecycle.py
+shelbytrain/manifest.py
+shelbytrain/sharder.py
+shelbytrain.egg-info/PKG-INFO
+shelbytrain.egg-info/SOURCES.txt
+shelbytrain.egg-info/dependency_links.txt
+shelbytrain.egg-info/requires.txt
+shelbytrain.egg-info/top_level.txt
