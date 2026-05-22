@@ -1,9 +1,35 @@
+# Python
 .venv/
+venv/
+env/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Python packaging/build output
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Environment files
 .env
+.env.*
+!.env.example
 .shelby-cache/
+
+# Local/generated data
 data/
 benchmark-results.json
+benchmark-results-*.json
+*.pt
+*.pth
+*.onnx
+
+# OS/editor
 .DS_Store
-.env.example
