@@ -6,3 +6,4 @@ __pycache__/
 data/
 benchmark-results.json
 .DS_Store
+.env.example
