@@ -63,11 +63,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def get_client():
+def get_client(account: str | None = None):
     from shelbytrain.client import ShelbyHTTPClient
-    account = os.environ.get("SHELBY_ACCOUNT")
+    account = account or os.environ.get("SHELBY_ACCOUNT")
     if not account:
-        raise HTTPException(status_code=400, detail="SHELBY_ACCOUNT not set in environment")
+        raise HTTPException(status_code=400, detail="Shelby account not available")
     return ShelbyHTTPClient(
         account=account,
         api_key=os.getenv("SHELBY_API_KEY"),
@@ -225,13 +225,13 @@ def shelby_diagnostics() -> Dict[str, Any]:
 
     return checks
 
-def check_uploaded_shards(uploaded_manifest_path: str, max_shards: int) -> list[str]:
+def check_uploaded_shards(uploaded_manifest_path: str, max_shards: int, account: str | None = None) -> list[str]:
     uploaded_path = Path(uploaded_manifest_path)
     manifest_path = uploaded_path.parent / "manifest.json"
     manifest = json.loads(uploaded_path.read_text())
     shards = manifest.get("shards", [])[:max_shards]
     state = load_state(manifest_path if manifest_path.exists() else uploaded_path, manifest)
-    client = get_client()
+    client = get_client(account)
     unavailable = []
 
     for shard in shards:
@@ -910,7 +910,7 @@ def run_benchmark(req: BenchmarkRequest, background_tasks: BackgroundTasks, requ
                 return
 
             if shelby_modes and uploaded_manifest_path:
-                unavailable = check_uploaded_shards(uploaded_manifest_path, req.max_shards)
+                unavailable = check_uploaded_shards(uploaded_manifest_path, req.max_shards, wallet)
                 if unavailable:
                     message = (
                         "Shelby benchmark modes require uploaded shards to be readable. "
@@ -964,7 +964,7 @@ def run_benchmark(req: BenchmarkRequest, background_tasks: BackgroundTasks, requ
                 runs[run_id]["current_mode"] = "shelby_cold"
                 try:
                     shutil.rmtree(cache_dir, ignore_errors=True)
-                    client = get_client()
+                    client = get_client(wallet)
                     init_start = time.perf_counter()
                     dataset = load_dataset(
                         uploaded_manifest_path,
@@ -986,7 +986,7 @@ def run_benchmark(req: BenchmarkRequest, background_tasks: BackgroundTasks, requ
             if "shelby_cached" in req.modes and uploaded_manifest_path:
                 runs[run_id]["current_mode"] = "shelby_cached"
                 try:
-                    client = get_client()
+                    client = get_client(wallet)
                     init_start = time.perf_counter()
                     dataset = load_dataset(
                         uploaded_manifest_path,
