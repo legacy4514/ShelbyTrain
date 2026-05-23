@@ -12,4 +12,4 @@ services:
       - key: SHELBY_RPC_BASE_URL
         value: https://api.shelbynet.shelby.xyz/shelby
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: 3.11.11
