@@ -17,6 +17,12 @@ importers:
       '@aptos-labs/wallet-adapter-react':
         specifier: ^8.3.3
         version: 8.3.3(@aptos-labs/ts-sdk@7.0.0)(@telegram-apps/bridge@1.9.2)(@types/react@19.2.14)(@wallet-standard/core@1.1.1)(react@19.2.4)
+      '@shelby-protocol/react':
+        specifier: ^2.0.1
+        version: 2.0.1(@aptos-labs/ts-sdk@7.0.0)(@aptos-labs/wallet-adapter-react@8.3.3(@aptos-labs/ts-sdk@7.0.0)(@telegram-apps/bridge@1.9.2)(@types/react@19.2.14)(@wallet-standard/core@1.1.1)(react@19.2.4))(@shelby-protocol/sdk@0.3.1(@aptos-labs/ts-sdk@7.0.0))(@tanstack/react-query@5.100.10(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.0.2)
+      '@shelby-protocol/sdk':
+        specifier: ^0.3.1
+        version: 0.3.1(@aptos-labs/ts-sdk@7.0.0)
       '@tanstack/react-query':
         specifier: ^5.100.10
         version: 5.100.10(react@19.2.4)
@@ -228,6 +234,11 @@ packages:
   '@eslint/plugin-kit@0.4.1':
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@graphql-typed-document-node/core@3.2.0':
+    resolution: {integrity: sha512-mB9oAsNCm9aM3/SOv4YtBMqZbYj10R7dkq8byBqxGY/ncFwhf2oQzMV+LCRlWoDSEBJ3COiR1yeDvMtsoOsuFQ==}
+    peerDependencies:
+      graphql: ^0.8.0 || ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -578,6 +589,31 @@ packages:
 
   '@scure/bip39@2.2.0':
     resolution: {integrity: sha512-T/Bj/YvYMNkIPq6EENO6/rcs2e7qTNuyoUXf0KBFDmp0ZDu0H2X4Lq6yC3i0c8PcWkov5EbW+yQZZbdMmk154A==}
+
+  '@shelby-protocol/clay-codes@0.0.2':
+    resolution: {integrity: sha512-kvh59DNO84NjDM/TEJwWmTsrJi859wLEmAMuIa8xM417/qPgi+gjkg4UweUu2LDXdkt4kDnJdreB7ziyJJpglw==}
+
+  '@shelby-protocol/react@2.0.1':
+    resolution: {integrity: sha512-URueUmB5s40IefB3PPndpkD/1QShFfIC4z4BBh06tg8ILvEtsQfWlNNMRNufh6haWJyiZ7xbis5k4fvIqXY5Zw==}
+    peerDependencies:
+      '@aptos-labs/ts-sdk': ^5.2.1 || ^6.0.0
+      '@aptos-labs/wallet-adapter-react': ^6.0.0 || ^7.0.0
+      '@shelby-protocol/sdk': 0.3.1
+      '@tanstack/react-query': '>=5.0.0'
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+      typescript: '>=5.0.4'
+    peerDependenciesMeta:
+      '@aptos-labs/wallet-adapter-react':
+        optional: true
+
+  '@shelby-protocol/reed-solomon@0.0.1':
+    resolution: {integrity: sha512-Li+7Uj2LLe247YppsZDbZdnyhxGAmTBOx14QPvLNJzeq1lCmjeV7X2BtRzlvyElsvymQQI/WWcKIHu21ysCR9g==}
+
+  '@shelby-protocol/sdk@0.3.1':
+    resolution: {integrity: sha512-4Q3Q6BuK/IhS2Z0Eqb8LuVORd8udFFI9zdWswxdl0CHcmFK4h9Ysb4BQdWcHE8LfpwUOi+U54Gk55t7WW6Ns6w==}
+    peerDependencies:
+      '@aptos-labs/ts-sdk': ^5.2.1 || ^6.0.0
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -1557,6 +1593,21 @@ packages:
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
 
+  graphql-request@7.4.0:
+    resolution: {integrity: sha512-xfr+zFb/QYbs4l4ty0dltqiXIp07U6sl+tOKAb0t50/EnQek6CVVBLjETXi+FghElytvgaAWtIOt3EV7zLzIAQ==}
+    peerDependencies:
+      graphql: 14 - 16
+
+  graphql-tag@2.12.6:
+    resolution: {integrity: sha512-FdSNcu2QQcWnM2VNvSCCDCVS5PpPqpzgFT8+GXzqJuoDd0CBncxCY278u4mhRO7tMgo2JjgJA5aZ+nWSQ/Z+xg==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      graphql: ^0.9.0 || ^0.10.0 || ^0.11.0 || ^0.12.0 || ^0.13.0 || ^14.0.0 || ^15.0.0 || ^16.0.0
+
+  graphql@16.14.0:
+    resolution: {integrity: sha512-BBvQ/406p+4CZbTpCbVPSxfzrZrbnuWSP1ELYgyS6B+hNeKzgrdB4JczCa5VZUBQrDa9hUngm0KnexY6pJRN5Q==}
+    engines: {node: ^12.22.0 || ^14.16.0 || ^16.0.0 || >=17.0.0}
+
   has-bigints@1.1.0:
     resolution: {integrity: sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg==}
     engines: {node: '>= 0.4'}
@@ -2021,6 +2072,14 @@ packages:
     resolution: {integrity: sha512-iwqZSOoWIW+Ew4kAGUlN16J4M7OB3ysMLSZtnhmqx7njIHFPlxWBX8xo3lVTyFVq6mI/lL9qt2IsN1sHwaxJkg==}
     engines: {node: '>=10'}
 
+  p-limit@7.1.1:
+    resolution: {integrity: sha512-i8PyM2JnsNChVSYWLr2BAjNoLi0BAYC+wecOnZnVV+YSNJkzP7cWmvI34dk0WArWfH9KwBHNoZI3P3MppImlIA==}
+    engines: {node: '>=20'}
+
+  p-limit@7.3.0:
+    resolution: {integrity: sha512-7cIXg/Z0M5WZRblrsOla88S4wAK+zOQQWeBYfV3qJuJXMr+LnbYjaadrFaS0JILfEDPVqHyKnZ1Z/1d6J9VVUw==}
+    engines: {node: '>=20'}
+
   p-locate@5.0.0:
     resolution: {integrity: sha512-LaNjtRWUBY++zB5nE/NwcaoMylSPk+S+ZHNB1TzdbMJMny6dynpAGt7X/tl/QYq3TIeE6nxHppbo2LGymrG5Pw==}
     engines: {node: '>=10'}
@@ -2458,11 +2517,18 @@ packages:
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
+  yocto-queue@1.2.2:
+    resolution: {integrity: sha512-4LCcse/U2MHZ63HAJVE+v71o7yOdIe4cZ70Wpf8D/IyjDKYQLV5GD46B+hSTjJsvV5PztjvHoU580EftxjDZFQ==}
+    engines: {node: '>=12.20'}
+
   zod-validation-error@4.0.2:
     resolution: {integrity: sha512-Q6/nZLe6jxuU80qb/4uJ4t5v2VEZ44lzQjPDhYJNztRQ4wyWc6VF3D3Kb/fAuPetZQnhS3hnajCf9CsWesghLQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       zod: ^3.25.0 || ^4.0.0
+
+  zod@3.24.3:
+    resolution: {integrity: sha512-HhY1oqzWCQWuUqvBFnsyrtZRhyPeR7SUGv+C4+MsisMuVfSPx8HpwWqH8tRahSlt6M3PiFAcoeFhZAqIXTxoSg==}
 
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
@@ -2711,6 +2777,10 @@ snapshots:
     dependencies:
       '@eslint/core': 0.17.0
       levn: 0.4.1
+
+  '@graphql-typed-document-node/core@3.2.0(graphql@16.14.0)':
+    dependencies:
+      graphql: 16.14.0
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -2988,6 +3058,33 @@ snapshots:
     dependencies:
       '@noble/hashes': 2.2.0
       '@scure/base': 2.2.0
+
+  '@shelby-protocol/clay-codes@0.0.2': {}
+
+  '@shelby-protocol/react@2.0.1(@aptos-labs/ts-sdk@7.0.0)(@aptos-labs/wallet-adapter-react@8.3.3(@aptos-labs/ts-sdk@7.0.0)(@telegram-apps/bridge@1.9.2)(@types/react@19.2.14)(@wallet-standard/core@1.1.1)(react@19.2.4))(@shelby-protocol/sdk@0.3.1(@aptos-labs/ts-sdk@7.0.0))(@tanstack/react-query@5.100.10(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.0.2)':
+    dependencies:
+      '@aptos-labs/ts-sdk': 7.0.0
+      '@shelby-protocol/sdk': 0.3.1(@aptos-labs/ts-sdk@7.0.0)
+      '@tanstack/react-query': 5.100.10(react@19.2.4)
+      p-limit: 7.3.0
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+      typescript: 5.0.2
+    optionalDependencies:
+      '@aptos-labs/wallet-adapter-react': 8.3.3(@aptos-labs/ts-sdk@7.0.0)(@telegram-apps/bridge@1.9.2)(@types/react@19.2.14)(@wallet-standard/core@1.1.1)(react@19.2.4)
+
+  '@shelby-protocol/reed-solomon@0.0.1': {}
+
+  '@shelby-protocol/sdk@0.3.1(@aptos-labs/ts-sdk@7.0.0)':
+    dependencies:
+      '@aptos-labs/ts-sdk': 7.0.0
+      '@shelby-protocol/clay-codes': 0.0.2
+      '@shelby-protocol/reed-solomon': 0.0.1
+      graphql: 16.14.0
+      graphql-request: 7.4.0(graphql@16.14.0)
+      graphql-tag: 2.12.6(graphql@16.14.0)
+      p-limit: 7.1.1
+      zod: 3.24.3
 
   '@standard-schema/spec@1.1.0': {}
 
@@ -4086,6 +4183,18 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
+  graphql-request@7.4.0(graphql@16.14.0):
+    dependencies:
+      '@graphql-typed-document-node/core': 3.2.0(graphql@16.14.0)
+      graphql: 16.14.0
+
+  graphql-tag@2.12.6(graphql@16.14.0):
+    dependencies:
+      graphql: 16.14.0
+      tslib: 2.8.1
+
+  graphql@16.14.0: {}
+
   has-bigints@1.1.0: {}
 
   has-flag@4.0.0: {}
@@ -4519,6 +4628,14 @@ snapshots:
   p-limit@3.0.2:
     dependencies:
       p-try: 2.2.0
+
+  p-limit@7.1.1:
+    dependencies:
+      yocto-queue: 1.2.2
+
+  p-limit@7.3.0:
+    dependencies:
+      yocto-queue: 1.2.2
 
   p-locate@5.0.0:
     dependencies:
@@ -5092,8 +5209,12 @@ snapshots:
 
   yallist@3.1.1: {}
 
+  yocto-queue@1.2.2: {}
+
   zod-validation-error@4.0.2(zod@4.4.3):
     dependencies:
       zod: 4.4.3
+
+  zod@3.24.3: {}
 
   zod@4.4.3: {}

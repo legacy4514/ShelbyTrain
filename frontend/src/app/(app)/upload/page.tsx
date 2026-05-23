@@ -1,6 +1,10 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
-import { uploadApi } from "@/lib/api/client";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { Network } from "@aptos-labs/ts-sdk";
+import { useWallet as useAptosWallet } from "@aptos-labs/wallet-adapter-react";
+import { ShelbyClient } from "@shelby-protocol/sdk/browser";
+import { useUploadBlobs } from "@shelby-protocol/react";
+import { datasetsApi, uploadApi } from "@/lib/api/client";
 import { useJobPoller } from "@/lib/useJobPoller";
 import { Card, SectionTitle, Button, ProgressBar, Spinner, Badge } from "@/components/ui";
 import { WalletGuard } from "@/components/WalletGuard";
@@ -22,6 +26,12 @@ type ApiError = {
   message?: string;
 };
 
+type ShardInfo = {
+  index: number;
+  file: string;
+  size_bytes?: number;
+};
+
 const FORMATS = [
   { id: "image-tar"  as Format, label: "Image",   icon: "▦", description: "PNG/JPG images with labels.csv",          placeholder_dir: "data/raw_mnist",          placeholder_out: "data/shelbytrain_mnist",   default_shard: 1000  },
   { id: "text-jsonl" as Format, label: "Text",    icon: "≡", description: "JSONL text dataset with text + label",    placeholder_dir: "data/my_dataset.jsonl",   placeholder_out: "data/shelbytrain_text",    default_shard: 10000 },
@@ -39,6 +49,27 @@ function errorMessage(error: unknown) {
 
 function later(fn: () => void) { window.setTimeout(fn, 0); }
 
+function expirationToMicros(expiration: string) {
+  const normalized = expiration.trim().toLowerCase();
+  const match = normalized.match(/(\d+)\s*(day|days|hour|hours|minute|minutes)/);
+  if (!match) return (Date.now() + 7 * 24 * 60 * 60 * 1000) * 1000;
+
+  const amount = Number(match[1]);
+  const unit = match[2];
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  const delta =
+    unit.startsWith("day") ? amount * day :
+    unit.startsWith("hour") ? amount * hour :
+    amount * minute;
+  return (Date.now() + delta) * 1000;
+}
+
+function safeBlobSegment(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "dataset";
+}
+
 export default function UploadPage() {
   const [step, setStep]               = useState<Step>("configure");
   const [jobId, setJobId]             = useState<string | null>(null);
@@ -48,7 +79,22 @@ export default function UploadPage() {
   const [uploading, setUploading]     = useState(false);
   const [dragOver, setDragOver]       = useState(false);
   const [fileInfo, setFileInfo]       = useState<{ name: string; samples: number } | null>(null);
+  const [uploadProgress, setUploadProgress] = useState({
+    uploaded: 0,
+    total: 0,
+    current: "",
+    lastError: "",
+  });
   const fileInputRef                  = useRef<HTMLInputElement>(null);
+  const { account, signAndSubmitTransaction } = useAptosWallet();
+  const shelbyClient = useMemo(
+    () => new ShelbyClient({
+      network: Network.SHELBYNET,
+      apiKey: process.env.NEXT_PUBLIC_SHELBY_API_KEY,
+    }),
+    [],
+  );
+  const shelbyUpload = useUploadBlobs({ client: shelbyClient });
 
   const [form, setForm] = useState<UploadForm>({
     format:       "image-tar",
@@ -60,7 +106,7 @@ export default function UploadPage() {
   });
 
   const shardJob  = useJobPoller(step === "sharding"  ? jobId       : null);
-  const uploadJob = useJobPoller(step === "uploading" ? uploadJobId : null);
+  const uploadJob = useJobPoller(step === "uploading" && uploadJobId ? uploadJobId : null);
   const selectedFormat = FORMATS.find(f => f.id === form.format)!;
 
   useEffect(() => {
@@ -69,9 +115,7 @@ export default function UploadPage() {
       later(() => {
         setDatasetId(id);
         setStep("uploading");
-        uploadApi.toShelby(id, form.expiration)
-          .then(r => setUploadJobId(r.job_id))
-          .catch(e => { setError(errorMessage(e)); setStep("error"); });
+        startBrowserShelbyUpload(id);
       });
     }
     if (step === "sharding" && shardJob?.status === "error") {
@@ -138,19 +182,64 @@ export default function UploadPage() {
     }
   };
 
+  const startBrowserShelbyUpload = async (id: string) => {
+    if (!account || !signAndSubmitTransaction) {
+      setError("Connect an Aptos wallet that can sign Shelby upload transactions.");
+      setStep("error");
+      return;
+    }
+
+    setUploadJobId(null);
+    setUploadProgress({ uploaded: 0, total: 0, current: "Loading shard manifest", lastError: "" });
+    try {
+      const shardResponse = await datasetsApi.shards(id);
+      const shards = (shardResponse.shards ?? []) as ShardInfo[];
+      if (!shards.length) throw new Error("No local shards found for this dataset.");
+
+      const uploadPrefix = `${safeBlobSegment(form.dataset_name || id)}-${Date.now().toString(36)}`;
+      const blobs = [];
+      setUploadProgress({ uploaded: 0, total: shards.length, current: "Preparing shards", lastError: "" });
+
+      for (const shard of shards) {
+        setUploadProgress(prev => ({ ...prev, current: shard.file }));
+        const bytes = await datasetsApi.shardBytes(id, shard.index);
+        blobs.push({
+          blobName: `${uploadPrefix}/${shard.file}`,
+          blobData: new Uint8Array(bytes),
+          index: shard.index,
+        });
+      }
+
+      setUploadProgress(prev => ({ ...prev, current: "Waiting for wallet signature" }));
+      await shelbyUpload.mutateAsync({
+        signer: { account, signAndSubmitTransaction },
+        blobs: blobs.map(({ blobName, blobData }) => ({ blobName, blobData })),
+        expirationMicros: expirationToMicros(form.expiration),
+        maxConcurrentUploads: 3,
+      });
+
+      setUploadProgress({ uploaded: blobs.length, total: blobs.length, current: "Finalizing manifest", lastError: "" });
+      await uploadApi.completeClientUpload({
+        dataset_id: id,
+        upload_prefix: uploadPrefix,
+        shards: blobs.map(({ index, blobName }) => ({ index, blob_name: blobName })),
+      });
+      setStep("done");
+    } catch (e: unknown) {
+      const message = errorMessage(e);
+      setUploadProgress(prev => ({ ...prev, lastError: message }));
+      setError(message);
+      setStep("error");
+    }
+  };
+
   const resumeUpload = async () => {
     const id = datasetId || form.output_dir.split("/").pop() || "";
     if (!id) return;
     setError(null);
     setDatasetId(id);
     setStep("uploading");
-    try {
-      const r = await uploadApi.toShelby(id, form.expiration);
-      setUploadJobId(r.job_id);
-    } catch (e: unknown) {
-      setError(errorMessage(e));
-      setStep("error");
-    }
+    startBrowserShelbyUpload(id);
   };
 
   const reset = () => {
@@ -377,6 +466,25 @@ export default function UploadPage() {
               {uploadJob.last_error && (
                 <div style={{ marginTop: 6, fontFamily: "var(--mono)", fontSize: 11, color: "var(--amber)" }}>
                   {uploadJob.last_error}
+                </div>
+              )}
+            </>
+          )}
+          {!uploadJob && (
+            <>
+              <ProgressBar
+                value={uploadProgress.uploaded}
+                max={uploadProgress.total || 1}
+                label={`${uploadProgress.uploaded} / ${uploadProgress.total || "?"} shards`}
+              />
+              {uploadProgress.current && (
+                <div style={{ marginTop: 10, fontFamily: "var(--mono)", fontSize: 11, color: "var(--text3)" }}>
+                  Current: {uploadProgress.current}
+                </div>
+              )}
+              {uploadProgress.lastError && (
+                <div style={{ marginTop: 6, fontFamily: "var(--mono)", fontSize: 11, color: "var(--amber)" }}>
+                  {uploadProgress.lastError}
                 </div>
               )}
             </>

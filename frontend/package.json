@@ -12,6 +12,8 @@
     "@aptos-labs/ts-sdk": "^7.0.0",
     "@aptos-labs/wallet-adapter-core": "^8.5.1",
     "@aptos-labs/wallet-adapter-react": "^8.3.3",
+    "@shelby-protocol/react": "^2.0.1",
+    "@shelby-protocol/sdk": "^0.3.1",
     "@tanstack/react-query": "^5.100.10",
     "axios": "^1.16.0",
     "next": "16.2.6",

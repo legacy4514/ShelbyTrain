@@ -12,7 +12,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <AptosWalletAdapterProvider
         autoConnect
-        dappConfig={{ network: Network.TESTNET }}
+        dappConfig={{ network: Network.SHELBYNET }}
         disableTelemetry
         onError={(error) => {
           console.error("Wallet adapter error:", error);

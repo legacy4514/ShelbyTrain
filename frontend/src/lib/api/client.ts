@@ -21,6 +21,9 @@ export const datasetsApi = {
   list:    ()              => api.get("/api/datasets").then(r => r.data),
   get:     (id: string)   => api.get(`/api/datasets/${id}`).then(r => r.data),
   shards:  (id: string)   => api.get(`/api/datasets/${id}/shards`).then(r => r.data),
+  shardBytes: (id: string, index: number) =>
+    api.get(`/api/datasets/${id}/shards/${index}/download`, { responseType: "arraybuffer" })
+      .then(r => r.data as ArrayBuffer),
   preview: (id: string, rows = 10) => api.get(`/api/datasets/${id}/preview`, { params: { rows } }).then(r => r.data),
 };
 
@@ -37,6 +40,8 @@ export const uploadApi = {
     api.post("/api/upload/shard", body).then(r => r.data),
   toShelby: (dataset_id: string, expiration = "in 7 days") =>
     api.post("/api/upload/shelby", { dataset_id, expiration }).then(r => r.data),
+  completeClientUpload: (body: { dataset_id: string; upload_prefix: string; shards: { index: number; blob_name: string }[] }) =>
+    api.post("/api/upload/shelby/client-complete", body).then(r => r.data),
   resumeShelby: (dataset_id: string, expiration = "in 7 days") =>
     api.post("/api/upload/shelby/resume", { dataset_id, expiration }).then(r => r.data),
 };

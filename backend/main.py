@@ -15,6 +15,7 @@ from typing import Dict, Any
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from shelbytrain.lifecycle import (
@@ -432,6 +433,15 @@ def find_manifest_path(dataset_id: str, wallet: str | None = None) -> Path | Non
             return Path(m["path"])
     return None
 
+class ClientUploadedShard(BaseModel):
+    index: int
+    blob_name: str
+
+class ClientUploadCompleteRequest(BaseModel):
+    dataset_id: str
+    upload_prefix: str
+    shards: list[ClientUploadedShard]
+
 def upload_dataset_job(req: UploadRequest, job_id: str, *, resume: bool, wallet: str | None = None) -> None:
     manifest_path = find_manifest_path(req.dataset_id, wallet)
     if not manifest_path:
@@ -624,6 +634,63 @@ def list_shards(dataset_id: str, request: Request):
             manifest = json.loads(Path(m["path"]).read_text())
             return {"shards": merge_shard_state(m["path"], manifest.get("shards", []))}
     raise HTTPException(status_code=404, detail="Dataset not found")
+
+@app.get("/api/datasets/{dataset_id}/shards/{shard_index}/download")
+def download_shard(dataset_id: str, shard_index: int, request: Request):
+    wallet = require_wallet(request)
+    manifest_path = find_manifest_path(dataset_id, wallet)
+    if not manifest_path:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    manifest = json.loads(manifest_path.read_text())
+    shard = next((s for s in manifest.get("shards", []) if int(s.get("index", -1)) == shard_index), None)
+    if not shard:
+        raise HTTPException(status_code=404, detail="Shard not found")
+
+    shard_path = Path(shard.get("local_path", "")).resolve()
+    dataset_dir = manifest_path.parent.resolve()
+    if dataset_dir not in [shard_path.parent, *shard_path.parents]:
+        raise HTTPException(status_code=403, detail="Shard path is outside dataset workspace")
+    if not shard_path.exists():
+        raise HTTPException(status_code=404, detail="Shard file not found")
+
+    return FileResponse(
+        shard_path,
+        media_type="application/x-tar",
+        filename=shard.get("file") or shard_path.name,
+    )
+
+@app.post("/api/upload/shelby/client-complete")
+def complete_client_upload(req: ClientUploadCompleteRequest, request: Request):
+    wallet = require_wallet(request)
+    manifest_path = find_manifest_path(req.dataset_id, wallet)
+    if not manifest_path:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    manifest = ensure_manifest_integrity(json.loads(manifest_path.read_text()))
+    uploaded_by_index = {shard.index: shard.blob_name for shard in req.shards}
+    missing = [
+        shard.get("index")
+        for shard in manifest.get("shards", [])
+        if shard.get("index") not in uploaded_by_index
+    ]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Missing uploaded shards: {missing}")
+
+    set_upload_prefix(manifest_path, req.upload_prefix)
+    uploaded_manifest = copy.deepcopy(manifest)
+    for shard in uploaded_manifest.get("shards", []):
+        shard["blob_name"] = uploaded_by_index[shard["index"]]
+        set_shard_status(manifest_path, shard, "verified")
+
+    uploaded_path = manifest_path.parent / "manifest.uploaded.json"
+    uploaded_path.write_text(json.dumps(uploaded_manifest, indent=2))
+    return {
+        "status": "done",
+        "dataset_id": req.dataset_id,
+        "uploaded_manifest": str(uploaded_path),
+        "uploaded": len(uploaded_manifest.get("shards", [])),
+    }
 
 @app.get("/api/datasets/{dataset_id}/preview")
 def preview_dataset(dataset_id: str, request: Request, rows: int = 10):
