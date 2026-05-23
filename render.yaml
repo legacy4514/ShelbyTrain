@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: shelbytrain-backend
+    runtime: python
+    buildCommand: pip install -r backend/requirements.txt && pip install -e .
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: SHELBY_ACCOUNT
+        sync: false
+      - key: SHELBY_API_KEY
+        sync: false
+      - key: SHELBY_RPC_BASE_URL
+        value: https://api.shelbynet.shelby.xyz/shelby
+      - key: PYTHON_VERSION
+        value: 3.11.0
