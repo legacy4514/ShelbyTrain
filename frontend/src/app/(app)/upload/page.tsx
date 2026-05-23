@@ -87,12 +87,13 @@ export default function UploadPage() {
   });
   const fileInputRef                  = useRef<HTMLInputElement>(null);
   const { account, signAndSubmitTransaction } = useAptosWallet();
+  const shelbyApiKey = process.env.NEXT_PUBLIC_SHELBY_API_KEY;
   const shelbyClient = useMemo(
     () => new ShelbyClient({
       network: Network.SHELBYNET,
-      apiKey: process.env.NEXT_PUBLIC_SHELBY_API_KEY,
+      apiKey: shelbyApiKey,
     }),
-    [],
+    [shelbyApiKey],
   );
   const shelbyUpload = useUploadBlobs({ client: shelbyClient });
 
@@ -185,6 +186,11 @@ export default function UploadPage() {
   const startBrowserShelbyUpload = async (id: string) => {
     if (!account || !signAndSubmitTransaction) {
       setError("Connect an Aptos wallet that can sign Shelby upload transactions.");
+      setStep("error");
+      return;
+    }
+    if (!shelbyApiKey) {
+      setError("Shelby browser API key is missing. Set NEXT_PUBLIC_SHELBY_API_KEY on Vercel and redeploy the frontend.");
       setStep("error");
       return;
     }
