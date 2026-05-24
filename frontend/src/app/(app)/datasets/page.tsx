@@ -53,6 +53,8 @@ export default function DatasetsPage() {
   const [showManifest, setShowManifest] = useState(false);
   const [resumeJobId, setResumeJobId] = useState<string | null>(null);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  const [reconstructing, setReconstructing] = useState(false);
+  const [reconstructError, setReconstructError] = useState<string | null>(null);
 
   const { data: list, isLoading, refetch: refetchList } = useQuery({
     queryKey: ["datasets"],
@@ -106,6 +108,26 @@ export default function DatasetsPage() {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Resume upload failed";
       setResumeError(message);
+    }
+  };
+
+  const reconstructDataset = async () => {
+    if (!selected) return;
+    setReconstructError(null);
+    setReconstructing(true);
+    try {
+      const result = await datasetsApi.reconstruct(selected);
+      const url = URL.createObjectURL(result.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Reconstruct failed";
+      setReconstructError(message);
+    } finally {
+      setReconstructing(false);
     }
   };
 
@@ -298,7 +320,30 @@ export default function DatasetsPage() {
                 >
                   ↓ Download manifest
                 </button>
+
+                <button
+                  onClick={reconstructDataset}
+                  disabled={!detail.uploaded || reconstructing}
+                  style={{
+                    fontFamily: "var(--mono)", fontSize: 12,
+                    padding: "7px 16px",
+                    background: detail.uploaded ? "var(--bg2)" : "var(--bg1)",
+                    border: "1px solid var(--border2)",
+                    borderRadius: "var(--radius)",
+                    color: detail.uploaded ? "var(--text2)" : "var(--text3)",
+                    cursor: detail.uploaded && !reconstructing ? "pointer" : "not-allowed",
+                  }}
+                >
+                  {reconstructing ? "Reconstructing..." : "↓ Reconstruct data"}
+                </button>
               </div>
+
+              {reconstructError && (
+                <div style={{ marginTop: 14, color: "var(--red)", fontFamily: "var(--mono)",
+                  fontSize: 12, lineHeight: 1.6, overflowWrap: "anywhere", whiteSpace: "pre-wrap" }}>
+                  ✗ {reconstructError}
+                </div>
+              )}
 
               {showManifest && manifestData?.manifest && (
                 <div style={{

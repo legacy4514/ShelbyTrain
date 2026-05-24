@@ -7,3 +7,4 @@ pillow==10.0.0
 pandas==2.0.0
 pyarrow==12.0.0
 python-multipart==0.0.9
+pypdf==4.3.1

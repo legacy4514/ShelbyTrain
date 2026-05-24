@@ -18,6 +18,15 @@ export default api;
 
 export const datasetsApi = {
   manifest: (id: string) => api.get(`/api/datasets/${id}/manifest`).then(r => r.data),
+  reconstruct: (id: string) =>
+    api.post(`/api/datasets/${id}/reconstruct`, {}, { responseType: "blob" }).then(r => {
+      const disposition = String(r.headers["content-disposition"] ?? "");
+      const match = disposition.match(/filename="([^"]+)"/);
+      return {
+        blob: r.data as Blob,
+        filename: match?.[1] ?? `${id}.download`,
+      };
+    }),
   list:    ()              => api.get("/api/datasets").then(r => r.data),
   get:     (id: string)   => api.get(`/api/datasets/${id}`).then(r => r.data),
   shards:  (id: string)   => api.get(`/api/datasets/${id}/shards`).then(r => r.data),
@@ -28,11 +37,12 @@ export const datasetsApi = {
 };
 
 export const uploadApi = {
-  uploadFile: (file: File, datasetName: string) => {
+  uploadFile: (file: File | File[], datasetName: string) => {
     const form = new FormData();
-    form.append("file", file);
+    const files = Array.isArray(file) ? file : [file];
+    files.forEach((item) => form.append("files", item));
     form.append("dataset_name", datasetName);
-    return api.post("/api/upload/file", form, {
+    return api.post("/api/upload/files", form, {
       headers: { "Content-Type": "multipart/form-data" },
     }).then(r => r.data);
   },

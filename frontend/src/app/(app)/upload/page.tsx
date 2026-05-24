@@ -39,6 +39,8 @@ const FORMATS = [
   { id: "audio-tar"  as Format, label: "Audio",   icon: "♪", description: "WAV audio files with labels.csv",         placeholder_dir: "data/raw_audio",          placeholder_out: "data/shelbytrain_audio",   default_shard: 500   },
 ];
 
+const ACCEPTED_UPLOADS = ".png,.jpg,.jpeg,.webp,.bmp,.gif,.txt,.md,.jsonl,.json,.csv,.pdf,.docx";
+
 function errorMessage(error: unknown) {
   if (typeof error === "object" && error !== null) {
     const e = error as ApiError;
@@ -143,19 +145,28 @@ export default function UploadPage() {
     setFileInfo(null);
   };
 
-  const handleFile = async (file: File) => {
-    const ext = file.name.split(".").pop()?.toLowerCase();
-    const supported = ["txt", "jsonl", "csv"];
-    if (!supported.includes(ext || "")) {
-      setError(`Unsupported file type .${ext}. Supported: .txt .jsonl .csv`);
+  const handleFiles = async (files: File[]) => {
+    const supported = ["png", "jpg", "jpeg", "webp", "bmp", "gif", "txt", "md", "jsonl", "json", "csv", "pdf", "docx"];
+    const selected = files.filter(Boolean);
+    if (!selected.length) return;
+
+    const unsupported = selected
+      .map(file => file.name.split(".").pop()?.toLowerCase() || "")
+      .filter(ext => !supported.includes(ext));
+    if (unsupported.length) {
+      setError(`Unsupported file type .${unsupported[0]}. Supported: images, .txt, .md, .jsonl, .json, .csv, .pdf, .docx`);
       return;
     }
     setError(null);
     setUploading(true);
     try {
-      const name = file.name.replace(/\.[^.]+$/, "").replace(/\s+/g, "_").toLowerCase();
-      const result = await uploadApi.uploadFile(file, name);
-      setFileInfo({ name: file.name, samples: result.samples });
+      const first = selected[0];
+      const name = (selected.length === 1 ? first.name : `${first.name.replace(/\.[^.]+$/, "")}_${selected.length}_files`)
+        .replace(/\.[^.]+$/, "")
+        .replace(/\s+/g, "_")
+        .toLowerCase();
+      const result = await uploadApi.uploadFile(selected, name);
+      setFileInfo({ name: selected.length === 1 ? first.name : `${selected.length} files`, samples: result.samples });
       setForm(prev => ({
         ...prev,
         format:       result.format as Format,
@@ -299,8 +310,7 @@ export default function UploadPage() {
             onDrop={e => {
               e.preventDefault();
               setDragOver(false);
-              const file = e.dataTransfer.files[0];
-              if (file) handleFile(file);
+              handleFiles(Array.from(e.dataTransfer.files));
             }}
             onClick={() => fileInputRef.current?.click()}
             style={{
@@ -316,9 +326,10 @@ export default function UploadPage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".txt,.jsonl,.csv"
+              accept={ACCEPTED_UPLOADS}
+              multiple
               style={{ display: "none" }}
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+              onChange={e => handleFiles(Array.from(e.target.files ?? []))}
             />
             {uploading ? (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
@@ -343,7 +354,7 @@ export default function UploadPage() {
                   Drop your file here or click to browse
                 </div>
                 <div style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--text3)" }}>
-                  Supported: .txt .jsonl .csv — from anywhere on your computer
+                  Images, text, CSV, JSONL, PDF, DOCX — from anywhere on your computer
                 </div>
               </div>
             )}

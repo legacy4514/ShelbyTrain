@@ -1200,6 +1200,96 @@ def clear_cache(request: Request):
 
 from fastapi import UploadFile, File, Form
 
+IMAGE_UPLOAD_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+TEXT_UPLOAD_EXTS = {".txt", ".md", ".jsonl", ".json", ".csv", ".pdf", ".docx"}
+
+def safe_upload_name(name: str) -> str:
+    stem = Path(name).stem or "upload"
+    suffix = Path(name).suffix.lower()
+    safe_stem = re.sub(r"[^a-zA-Z0-9._-]+", "_", stem).strip("._-") or "upload"
+    return f"{safe_stem}{suffix}"
+
+def text_rows_from_upload(filename: str, content: bytes, text_field: str, label_field: str) -> list[dict[str, Any]]:
+    ext = Path(filename).suffix.lower()
+
+    if ext in (".txt", ".md"):
+        lines = content.decode("utf-8", errors="ignore").splitlines()
+        return [
+            {text_field: line.strip(), label_field: -1, "source": filename}
+            for line in lines
+            if line.strip()
+        ]
+
+    if ext in (".jsonl", ".json"):
+        rows = []
+        for line in content.decode("utf-8", errors="ignore").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                value = json.loads(line)
+                if isinstance(value, dict):
+                    rows.append(value)
+                else:
+                    rows.append({text_field: json.dumps(value), label_field: -1, "source": filename})
+            except json.JSONDecodeError:
+                rows.append({text_field: line, label_field: -1, "source": filename})
+        return rows
+
+    if ext == ".csv":
+        import csv as _csv
+        import io
+        reader = _csv.DictReader(io.StringIO(content.decode("utf-8", errors="ignore")))
+        return list(reader)
+
+    if ext == ".pdf":
+        import io
+        from pypdf import PdfReader
+        reader = PdfReader(io.BytesIO(content))
+        rows = []
+        for idx, page in enumerate(reader.pages):
+            text = (page.extract_text() or "").strip()
+            if text:
+                rows.append({text_field: text, label_field: -1, "source": filename, "page": idx + 1})
+        return rows
+
+    if ext == ".docx":
+        import zipfile
+        import xml.etree.ElementTree as ET
+        import io
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            xml = zf.read("word/document.xml")
+        root = ET.fromstring(xml)
+        ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+        rows = []
+        for para in root.findall(".//w:p", ns):
+            text = "".join(node.text or "" for node in para.findall(".//w:t", ns)).strip()
+            if text:
+                rows.append({text_field: text, label_field: -1, "source": filename})
+        return rows
+
+    raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
+def upload_response(
+    *,
+    status: str,
+    fmt: str,
+    safe_name: str,
+    dataset_dir: Path,
+    wallet: str,
+    shard_size: int,
+    samples: int,
+):
+    return {
+        "status": status,
+        "format": fmt,
+        "dataset_name": safe_name,
+        "dataset_dir": str(dataset_dir),
+        "output_dir": str(wallet_data_root(wallet) / f"shelbytrain_{safe_name}"),
+        "shard_size": shard_size,
+        "samples": samples,
+    }
+
 @app.post("/api/upload/file")
 async def upload_file(request: Request,
     file: UploadFile = File(...),
@@ -1207,78 +1297,105 @@ async def upload_file(request: Request,
     text_field: str = Form(default="text"),
     label_field: str = Form(default="label"),
 ):
-    """Accept a raw file upload from the browser and save it ready for sharding."""
-    import io
+    """Accept a single raw file upload from the browser and save it ready for sharding."""
+    return await upload_files(
+        request=request,
+        files=[file],
+        dataset_name=dataset_name,
+        text_field=text_field,
+        label_field=label_field,
+    )
+
+@app.post("/api/upload/files")
+async def upload_files(request: Request,
+    files: list[UploadFile] = File(...),
+    dataset_name: str = Form(...),
+    text_field: str = Form(default="text"),
+    label_field: str = Form(default="label"),
+):
+    """Accept browser files and save them as an image or text dataset ready for sharding."""
     wallet = require_wallet(request)
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
 
-    filename = file.filename or "upload.txt"
-    ext = Path(filename).suffix.lower()
-    content = await file.read()
-
-    # Save raw file to the current wallet workspace.
     uploads_dir = wallet_uploads_root(wallet)
     uploads_dir.mkdir(parents=True, exist_ok=True)
     safe_name = dataset_name.replace(" ", "_").replace("/", "_")
     out_dir = uploads_dir / safe_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if ext in (".txt",):
-        # Convert plain text to JSONL — one line per sample
-        lines = content.decode("utf-8", errors="ignore").splitlines()
-        lines = [l.strip() for l in lines if l.strip()]
-        jsonl_path = out_dir / "data.jsonl"
-        with jsonl_path.open("w") as f:
-            for line in lines:
-                f.write(json.dumps({text_field: line, label_field: -1}) + "\n")
-        return {
-            "status": "ok",
-            "format": "text-jsonl",
-            "dataset_name": safe_name,
-            "dataset_dir": str(jsonl_path),
-            "output_dir": str(wallet_data_root(wallet) / f"shelbytrain_{safe_name}"),
-            "shard_size": 10000,
-            "samples": len(lines),
-        }
+    uploads = []
+    for file in files:
+        filename = file.filename or "upload"
+        content = await file.read()
+        uploads.append((filename, Path(filename).suffix.lower(), content))
 
-    elif ext in (".jsonl", ".json"):
-        # Save as-is
-        jsonl_path = out_dir / "data.jsonl"
-        jsonl_path.write_bytes(content)
-        lines = [l for l in content.decode("utf-8", errors="ignore").splitlines() if l.strip()]
-        return {
-            "status": "ok",
-            "format": "text-jsonl",
-            "dataset_name": safe_name,
-            "dataset_dir": str(jsonl_path),
-            "output_dir": str(wallet_data_root(wallet) / f"shelbytrain_{safe_name}"),
-            "shard_size": 10000,
-            "samples": len(lines),
-        }
+    image_uploads = [item for item in uploads if item[1] in IMAGE_UPLOAD_EXTS]
+    text_uploads = [item for item in uploads if item[1] in TEXT_UPLOAD_EXTS]
+    unsupported = [item[1] or "(none)" for item in uploads if item[1] not in IMAGE_UPLOAD_EXTS | TEXT_UPLOAD_EXTS]
 
-    elif ext == ".csv":
-        # Convert CSV to JSONL
-        import csv as _csv
-        reader = _csv.DictReader(io.StringIO(content.decode("utf-8", errors="ignore")))
-        rows = list(reader)
-        jsonl_path = out_dir / "data.jsonl"
-        with jsonl_path.open("w") as f:
-            for row in rows:
-                f.write(json.dumps(row) + "\n")
-        return {
-            "status": "ok",
-            "format": "text-jsonl",
-            "dataset_name": safe_name,
-            "dataset_dir": str(jsonl_path),
-            "output_dir": str(wallet_data_root(wallet) / f"shelbytrain_{safe_name}"),
-            "shard_size": 10000,
-            "samples": len(rows),
-        }
-
-    else:
+    if unsupported:
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file type: {ext}. Supported: .txt, .jsonl, .csv"
+            detail=(
+                f"Unsupported file type(s): {', '.join(sorted(set(unsupported)))}. "
+                "Supported: .png, .jpg, .jpeg, .webp, .bmp, .gif, .txt, .md, .jsonl, .json, .csv, .pdf, .docx"
+            ),
         )
+
+    if image_uploads and text_uploads:
+        raise HTTPException(status_code=400, detail="Upload either images or text/document files, not both.")
+
+    if image_uploads:
+        import csv as _csv
+        images_dir = out_dir / "images"
+        images_dir.mkdir(parents=True, exist_ok=True)
+        labels_path = out_dir / "labels.csv"
+        seen: set[str] = set()
+        rows = []
+        for idx, (filename, _ext, content) in enumerate(image_uploads):
+            safe_file = safe_upload_name(filename)
+            if safe_file in seen:
+                safe_file = f"{Path(safe_file).stem}_{idx}{Path(safe_file).suffix}"
+            seen.add(safe_file)
+            (images_dir / safe_file).write_bytes(content)
+            rows.append({"filename": safe_file, "label": -1})
+
+        with labels_path.open("w", newline="") as f:
+            writer = _csv.DictWriter(f, fieldnames=["filename", "label"])
+            writer.writeheader()
+            writer.writerows(rows)
+
+        return upload_response(
+            status="ok",
+            fmt="image-tar",
+            safe_name=safe_name,
+            dataset_dir=out_dir,
+            wallet=wallet,
+            shard_size=1000,
+            samples=len(rows),
+        )
+
+    rows = []
+    for filename, _ext, content in text_uploads:
+        rows.extend(text_rows_from_upload(filename, content, text_field, label_field))
+    if not rows:
+        raise HTTPException(status_code=400, detail="No text could be extracted from the uploaded file(s).")
+
+    jsonl_path = out_dir / "data.jsonl"
+    with jsonl_path.open("w") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
+
+    return upload_response(
+        status="ok",
+        fmt="text-jsonl",
+        safe_name=safe_name,
+        dataset_dir=jsonl_path,
+        wallet=wallet,
+        shard_size=10000,
+        samples=len(rows),
+    )
 
 
 @app.get("/api/datasets/{dataset_id}/manifest")
@@ -1305,3 +1422,118 @@ def get_manifest(dataset_id: str, request: Request):
                     "type": "local",
                 }
     raise HTTPException(status_code=404, detail="Dataset not found")
+
+
+@app.post("/api/datasets/{dataset_id}/reconstruct")
+async def reconstruct_dataset(dataset_id: str, request: Request):
+    """Download all shards from Shelby and reconstruct the original data file."""
+    import tarfile, io, json as _json
+
+    wallet = require_wallet(request)
+
+    # Find manifest
+    manifest_data = None
+    for m in find_manifests(wallet):
+        if m["id"] == dataset_id:
+            uploaded_path = m.get("uploaded_path")
+            local_path = m.get("path")
+            path = uploaded_path if uploaded_path and Path(uploaded_path).exists() else local_path
+            if path:
+                manifest_data = _json.loads(Path(path).read_text())
+            break
+
+    if not manifest_data:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+
+    fmt = manifest_data.get("format", "text-jsonl")
+    name = manifest_data.get("name", dataset_id)
+    shards = manifest_data.get("shards", [])
+    if not shards:
+        raise HTTPException(status_code=400, detail="Manifest has no shards to reconstruct")
+
+    # Get client
+    account = wallet
+    from shelbytrain.client import ShelbyHTTPClient
+    client = ShelbyHTTPClient(
+        account=account,
+        api_key=os.getenv("SHELBY_API_KEY"),
+        rpc_base_url=os.getenv("SHELBY_RPC_BASE_URL", "https://api.shelbynet.shelby.xyz/shelby"),
+    )
+
+    from shelbytrain.cache import ShelbyCache
+    cache = ShelbyCache(str(wallet_cache_dir(wallet)))
+
+    # Download and reconstruct
+    if fmt == "text-jsonl":
+        text_field = manifest_data.get("text_field", "text")
+        lines = []
+        for shard in shards:
+            cached_path = cache.get(shard["blob_name"])
+            if not cached_path.exists():
+                client.download_blob(shard["blob_name"], str(cached_path))
+            with tarfile.open(cached_path, "r") as tar:
+                f = tar.extractfile("data.jsonl")
+                if f:
+                    for line in f.read().decode("utf-8").splitlines():
+                        if line.strip():
+                            obj = _json.loads(line)
+                            text = obj.get(text_field)
+                            if text is None:
+                                text = obj.get("text")
+                            if text is not None:
+                                lines.append(str(text))
+        content_bytes = "\n".join(lines).encode("utf-8")
+        filename = f"{name}.txt"
+        media_type = "text/plain"
+
+    elif fmt == "image-tar":
+        # Return as combined TAR
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as out_tar:
+            for shard in shards:
+                cached_path = cache.get(shard["blob_name"])
+                if not cached_path.exists():
+                    client.download_blob(shard["blob_name"], str(cached_path))
+                with tarfile.open(cached_path, "r") as in_tar:
+                    for member in in_tar.getmembers():
+                        f = in_tar.extractfile(member)
+                        if f:
+                            out_tar.addfile(member, f)
+        content_bytes = buf.getvalue()
+        filename = f"{name}.tar.gz"
+        media_type = "application/gzip"
+
+    elif fmt == "parquet":
+        import pandas as pd
+        dfs = []
+        for shard in shards:
+            cached_path = cache.get(shard["blob_name"])
+            if not cached_path.exists():
+                client.download_blob(shard["blob_name"], str(cached_path))
+            with tarfile.open(cached_path, "r") as tar:
+                f = tar.extractfile("data.parquet")
+                if f:
+                    dfs.append(pd.read_parquet(io.BytesIO(f.read())))
+        if dfs:
+            import pandas as pd
+            combined = pd.concat(dfs, ignore_index=True)
+            buf = io.BytesIO()
+            combined.to_parquet(buf, index=False)
+            content_bytes = buf.getvalue()
+        else:
+            content_bytes = b""
+        filename = f"{name}.parquet"
+        media_type = "application/octet-stream"
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Reconstruct not supported for format: {fmt}")
+
+    from fastapi.responses import Response
+    return Response(
+        content=content_bytes,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
