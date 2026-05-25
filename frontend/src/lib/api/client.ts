@@ -36,6 +36,25 @@ export const datasetsApi = {
   preview: (id: string, rows = 10) => api.get(`/api/datasets/${id}/preview`, { params: { rows } }).then(r => r.data),
 };
 
+export const reconstructApi = {
+  fromManifest: (manifestFile: File, shelbyAccount: string) => {
+    const form = new FormData();
+    form.append("manifest_file", manifestFile);
+    if (shelbyAccount.trim()) form.append("shelby_account", shelbyAccount.trim());
+    return api.post("/api/reconstruct/manifest", form, {
+      headers: { "Content-Type": "multipart/form-data" },
+      responseType: "blob",
+    }).then(r => {
+      const disposition = String(r.headers["content-disposition"] ?? "");
+      const match = disposition.match(/filename="([^"]+)"/);
+      return {
+        blob: r.data as Blob,
+        filename: match?.[1] ?? "reconstructed-data",
+      };
+    });
+  },
+};
+
 export const uploadApi = {
   uploadFile: (file: File | File[], datasetName: string) => {
     const form = new FormData();

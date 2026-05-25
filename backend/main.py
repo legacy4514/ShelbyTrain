@@ -1537,3 +1537,125 @@ async def reconstruct_dataset(dataset_id: str, request: Request):
             "Access-Control-Expose-Headers": "Content-Disposition",
         },
     )
+
+
+@app.post("/api/reconstruct/manifest")
+async def reconstruct_from_manifest(
+    request: Request,
+    manifest_file: UploadFile = File(...),
+    shelby_account: str = Form(default=""),
+):
+    """Reconstruct a dataset from a sent manifest.uploaded.json file."""
+    import json as _json
+    import tarfile, io
+    from fastapi.responses import Response
+
+    wallet = require_wallet(request)
+    raw = await manifest_file.read()
+    try:
+        manifest_data = _json.loads(raw.decode("utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid manifest JSON: {exc}")
+
+    account = (
+        manifest_data.get("shelby_account")
+        or manifest_data.get("account")
+        or manifest_data.get("owner")
+        or shelby_account.strip()
+        or wallet
+    )
+    if not account:
+        raise HTTPException(status_code=400, detail="Shelby account is required for this manifest.")
+
+    fmt = manifest_data.get("format", "text-jsonl")
+    name = manifest_data.get("name", Path(manifest_file.filename or "dataset").stem)
+    shards = manifest_data.get("shards", [])
+    if not shards:
+        raise HTTPException(status_code=400, detail="Manifest has no shards to reconstruct")
+
+    from shelbytrain.client import ShelbyHTTPClient
+    from shelbytrain.cache import ShelbyCache
+
+    client = ShelbyHTTPClient(
+        account=account,
+        api_key=os.getenv("SHELBY_API_KEY"),
+        rpc_base_url=os.getenv("SHELBY_RPC_BASE_URL", "https://api.shelbynet.shelby.xyz/shelby"),
+    )
+    cache = ShelbyCache(str(wallet_cache_dir(wallet)))
+
+    if fmt == "text-jsonl":
+        text_field = manifest_data.get("text_field", "text")
+        lines = []
+        for shard in shards:
+            blob_name = shard.get("blob_name")
+            if not blob_name:
+                raise HTTPException(status_code=400, detail="Manifest shard is missing blob_name")
+            cached_path = cache.get(blob_name)
+            if not cached_path.exists():
+                client.download_blob(blob_name, str(cached_path))
+            with tarfile.open(cached_path, "r") as tar:
+                f = tar.extractfile("data.jsonl")
+                if f:
+                    for line in f.read().decode("utf-8").splitlines():
+                        if line.strip():
+                            obj = _json.loads(line)
+                            text = obj.get(text_field)
+                            if text is None:
+                                text = obj.get("text")
+                            if text is not None:
+                                lines.append(str(text))
+        content_bytes = "\n".join(lines).encode("utf-8")
+        filename = f"{name}.txt"
+        media_type = "text/plain"
+
+    elif fmt == "image-tar":
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as out_tar:
+            for shard in shards:
+                blob_name = shard.get("blob_name")
+                if not blob_name:
+                    raise HTTPException(status_code=400, detail="Manifest shard is missing blob_name")
+                cached_path = cache.get(blob_name)
+                if not cached_path.exists():
+                    client.download_blob(blob_name, str(cached_path))
+                with tarfile.open(cached_path, "r") as in_tar:
+                    for member in in_tar.getmembers():
+                        f = in_tar.extractfile(member)
+                        if f:
+                            out_tar.addfile(member, f)
+        content_bytes = buf.getvalue()
+        filename = f"{name}.tar.gz"
+        media_type = "application/gzip"
+
+    elif fmt == "parquet":
+        import pandas as pd
+        dfs = []
+        for shard in shards:
+            blob_name = shard.get("blob_name")
+            if not blob_name:
+                raise HTTPException(status_code=400, detail="Manifest shard is missing blob_name")
+            cached_path = cache.get(blob_name)
+            if not cached_path.exists():
+                client.download_blob(blob_name, str(cached_path))
+            with tarfile.open(cached_path, "r") as tar:
+                f = tar.extractfile("data.parquet")
+                if f:
+                    dfs.append(pd.read_parquet(io.BytesIO(f.read())))
+        combined = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+        buf = io.BytesIO()
+        combined.to_parquet(buf, index=False)
+        content_bytes = buf.getvalue()
+        filename = f"{name}.parquet"
+        media_type = "application/octet-stream"
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Reconstruct not supported for format: {fmt}")
+
+    return Response(
+        content=content_bytes,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )

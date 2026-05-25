@@ -7,6 +7,7 @@ const nav = [
   { href: "/upload",     label: "Upload",      icon: "↑" },
   { href: "/benchmark",  label: "Benchmark",   icon: "◈" },
   { href: "/datasets",   label: "Datasets",    icon: "▦" },
+  { href: "/reconstruct", label: "Reconstruct", icon: "↓" },
   { href: "/cache",      label: "Cache",       icon: "◎" },
 ];
 
