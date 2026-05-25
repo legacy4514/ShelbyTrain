@@ -10,6 +10,14 @@ The simple idea:
 dataset -> shards -> Shelby storage -> manifest -> PyTorch DataLoader
 ```
 
+## Install
+
+```bash
+pip install shelbytrain
+```
+
+The Python package provides the sharding, manifest, cache, Shelby download client, and PyTorch dataset loader pieces. The web app in this repository builds on top of those same ideas to make upload, benchmark, and reconstruction easier from a browser.
+
 ## The Problem
 
 AI datasets are often hard to share and reproduce.
@@ -26,7 +34,7 @@ ShelbyTrain solves this by making the dataset addressable through a manifest.
 
 Instead of sending someone the whole dataset, you send them a small `manifest.uploaded.json`. That manifest tells ShelbyTrain where the dataset shards live on Shelby and how to load them.
 
-## What This Project Does
+## What This Project Provides
 
 ShelbyTrain has two parts:
 
@@ -37,6 +45,8 @@ ShelbyTrain has two parts:
 2. **A Python/PyTorch loader**
 
    The Python package reads a manifest, downloads shards from Shelby when needed, caches them locally, and exposes the data as a PyTorch dataset.
+
+If you are installing from PyPI, the main thing you need is the Python loader/sharder API. If you are using the full repository, you also get the browser app.
 
 ## Why Shelby?
 
@@ -131,6 +141,14 @@ For best portability, a shared manifest should also include the Shelby owner acc
 
 If the manifest does not include `shelby_account`, the Reconstruct page lets the user enter it manually.
 
+For PyTorch users, the owner account matters because Shelby blob URLs are resolved from:
+
+```text
+shelby_account + blob_name
+```
+
+So a manifest with `blob_name` but no owner account is not fully self-contained. It can still work, but the user must know which account owns the blobs.
+
 ## PyTorch Usage
 
 ```python
@@ -153,6 +171,48 @@ for inputs, labels in loader:
 ```
 
 On the first run, ShelbyTrain downloads shards from Shelby. After that, it uses the local cache.
+
+## Creating Local Shards
+
+Image datasets should be arranged like this:
+
+```text
+dataset/
+  images/
+    sample-001.png
+    sample-002.png
+  labels.csv
+```
+
+`labels.csv` should contain:
+
+```csv
+filename,label
+sample-001.png,0
+sample-002.png,1
+```
+
+Then create shards:
+
+```python
+from shelbytrain import create_image_shards
+
+manifest = create_image_shards(
+    dataset_dir="dataset",
+    output_dir="data/my_dataset",
+    shard_size=1000,
+    dataset_name="my-dataset",
+)
+```
+
+For text datasets, use JSONL:
+
+```json
+{"text": "hello world", "label": 0}
+{"text": "another sample", "label": 1}
+```
+
+The generated `manifest.json` describes local shards. After upload, `manifest.uploaded.json` should include Shelby `blob_name` values for each shard.
 
 ## Reconstructing From A Sent Manifest
 
@@ -182,4 +242,4 @@ ShelbyTrain is an experimental dataset pipeline. The current focus is proving a 
 - benchmarking,
 - and reconstruction.
 
-Future improvements could include original-file preservation for PDFs/DOCX, richer label editing, manifest signing and others
+Future improvements could include original-file preservation for PDFs/DOCX, richer label editing, manifest signing, public dataset pages, and a smoother manifest-first PyTorch API.
